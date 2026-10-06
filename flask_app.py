@@ -1,10 +1,8 @@
-import telebot
 import os
 import hashlib
 import requests
 from google import genai
 from flask import Flask, request
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- DATA KREDENSIAL ---
 TOKEN = '8654258790:AAEz8WelOJrqxRHXU3iY6r3vhW0mwaZNcSA'
@@ -15,108 +13,71 @@ DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125"
 DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction"
 
-# Inisialisasi Klien Gemini & Bot
+# Inisialisasi Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
-bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# --- MENU UTAMA ---
-def buat_menu_utama():
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add(
-        InlineKeyboardButton("🛍️ Layanan PPOB", callback_data="menu_ppob"),
-        InlineKeyboardButton("👤 Akun Saya", callback_data="menu_akun"),
-        InlineKeyboardButton("💡 Bantuan Promosi", callback_data="menu_bantuan")
-    )
-    return markup
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-@bot.message_handler(commands=['start'])
-def start_bot(message):
-    pesan_sapaan = "Halo! Selamat datang di **Asisten Promosi & Layanan PPOB**. 🚀\n\nKirimkan langsung link produk ke sini untuk buat caption afiliasi, atau pilih menu PPOB di bawah ini:"
-    bot.reply_to(message, pesan_sapaan, reply_markup=buat_menu_utama(), parse_mode="Markdown")
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    data = call.data
-    if data == "menu_utama":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Silakan pilih menu utama di bawah ini:", reply_markup=buat_menu_utama())
-    elif data == "menu_ppob":
-        markup_ppob = InlineKeyboardMarkup(row_width=2)
-        markup_ppob.add(
-            InlineKeyboardButton("📱 Pulsa XL 10rb (Test Sandbox)", callback_data="buy_xld10_12000_087800001232"),
-            InlineKeyboardButton("🔙 Kembali", callback_data="menu_utama")
-        )
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🛠 *Kategori Layanan PPOB*\nSilakan pilih produk uji coba:", reply_markup=markup_ppob, parse_mode="Markdown")
-    elif data.startswith("buy_"):
-        parts = data.split("_")
-        sku = parts[1]
-        nomor_target = parts[3]
-        
-        ref_id = f"TRX_{call.from_user.id}_{int(os.urandom(2).hex(), 16)}"
-        raw_sign = DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id
-        sign = hashlib.md5(raw_sign.encode()).hexdigest()
-        
-        payload = {
-            "username": DIGIFLAZZ_USERNAME,
-            "buyer_sku_code": sku,
-            "customer_no": nomor_target,
-            "ref_id": ref_id,
-            "sign": sign,
-            "testing": True
-        }
-        
-        try:
-            session = requests.Session()
-            session.trust_env = False
-            res = session.post(DIGIFLAZZ_URL, json=payload, headers={'Content-Type': 'application/json'}, timeout=15)
-            
-            res_json = res.json().get('data', {})
-            status_transaksi = res_json.get('message', 'Diproses')
-            rc_code = res_json.get('rc', '-')
-            
-            bot.edit_message_text(
-                chat_id=call.message.chat.id, 
-                message_id=call.message.message_id, 
-                text=f"🚀 *Respon Server Digiflazz!*\n\nProduk: `{sku}`\nTarget: `{nomor_target}`\nPesan: *{status_transaksi}*\nRC: `{rc_code}`\nRef ID: `{ref_id}`", 
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ Gagal koneksi ke Digiflazz: {str(e)}")
-
-    elif data == "menu_akun":
-        bot.send_message(call.message.chat.id, f"👤 *Data Akun*\nUsername: `{DIGIFLAZZ_USERNAME}`\nID Telegram: `{call.from_user.id}`", parse_mode="Markdown")
-    elif data == "menu_bantuan":
-        bot.send_message(call.message.chat.id, "Cukup kirimkan link produk afiliasi Anda ke chat ini untuk merangkai caption AI.")
-
-@bot.message_handler(func=lambda message: True)
-def handle_text(message):
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"Buatkan caption promosi afiliasi yang menarik berdasarkan teks ini: {message.text}"
-        )
-        bot.reply_to(message, response.text)
-    except Exception as e:
-        bot.reply_to(message, f"Gagal memproses AI: {str(e)}")
+def kirim_pesan(chat_id, text, reply_markup=None):
+    url = f"{TELEGRAM_API_URL}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    requests.post(url, json=payload)
 
 @app.route('/webhook', methods=['POST'])
 def webhook_terima():
     try:
-        if request.headers.get('content-type') == 'application/json':
-            json_string = request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_string)
-            bot.process_new_updates([update])
-            return '', 200
-        else:
-            return 'Forbidden', 403
+        data = request.get_json(force=True)
+        
+        # Cek jika ada pesan teks biasa
+        if "message" in data:
+            chat_id = data["message"]["chat"]["id"]
+            text = data["message"].get("text", "")
+            
+            if text.startswith("/start"):
+                menu = {
+                    "inline_keyboard": [
+                        [{"text": "🛍️️ Layanan PPOB", "callback_data": "menu_ppob"}],
+                        {"text": "💡 Bantuan AI Gemini", "callback_data": "menu_bantuan"}]
+                    ]
+                }
+                kirim_pesan(chat_id, "Halo! Selamat datang di *Asisten PPOB & AI*. 🚀\n\nKirimkan teks atau pertanyaan apa saja untuk dijawab AI:", menu)
+            else:
+                # Proses pakai Gemini AI
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=f"Jawab dengan ringkas dan menarik: {text}"
+                    )
+                    kirim_pesan(chat_id, response.text)
+                except Exception as ai_err:
+                    kirim_pesan(chat_id, f"Gagal memproses AI: {str(ai_err)}")
+
+        # Cek jika ada klik tombol inline (callback_query)
+        elif "callback_query" in data:
+            callback = data["callback_query"]
+            chat_id = callback["message"]["chat"]["id"]
+            callback_data = callback["data"]
+            
+            if callback_data == "menu_ppob":
+                kirim_pesan(chat_id, "🛠 *Menu PPOB Sandbox*\nFitur transaksi siap digunakan.")
+            elif callback_data == "menu_bantuan":
+                kirim_pesan(chat_id, "Kirimkan pesan apa saja ke bot ini, AI akan otomatis membalasnya.")
+
+        return '', 200
     except Exception as e:
-        print(f"ERROR WEBHOOK: {str(e)}")
+        print(f"Error handling webhook: {str(e)}")
         return '', 200
 
 @app.route('/')
 def index():
-    return "Server Bot PPOB & AI Aktif di Railway!", 200
+    return "Server Bot PPOB & AI Aktif Mulus!", 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
