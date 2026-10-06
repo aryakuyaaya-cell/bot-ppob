@@ -7,7 +7,7 @@ from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- DATA KREDENSIAL ---
-TOKEN = TOKEN = '8654258790:AAEz8WelOJrqxRHXU3iY6r3vhW0mwaZNcSA'
+TOKEN = '8654258790:AAEz8WelOJrqxRHXU3iY6r3vhW0mwaZNcSA'
 GEMINI_API_KEY = 'AQ.Ab8RN6IqzTlrvnBaghoVDi9bYXo9NW2VX4T9JF9wJgc7_mkggQ'
 
 # Kredensial Digiflazz Sandbox
@@ -15,7 +15,7 @@ DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125"
 DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction"
 
-# Inisialisasi Klien Gemini Baru
+# Inisialisasi Klien Gemini & Bot
 client = genai.Client(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
@@ -102,13 +102,17 @@ def handle_text(message):
 
 @app.route('/webhook', methods=['POST'])
 def webhook_terima():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
+    try:
+        if request.headers.get('content-type') == 'application/json':
+            json_string = request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_string)
+            bot.process_new_updates([update])
+            return '', 200
+        else:
+            return 'Forbidden', 403
+    except Exception as e:
+        print(f"ERROR WEBHOOK: {str(e)}")
         return '', 200
-    else:
-        return 'Forbidden', 403
 
 @app.route('/')
 def index():
