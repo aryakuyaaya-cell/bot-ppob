@@ -17,7 +17,7 @@ DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction"
 
 # Inisialisasi Klien Gemini Baru
 client = genai.Client(api_key=GEMINI_API_KEY)
-bot = telebot.TeleBot(TOKEN, threaded=False)
+bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
 # --- MENU UTAMA ---
@@ -106,7 +106,7 @@ def webhook_terima():
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
-        return 'OK', 200
+        return '', 200
     else:
         return 'Forbidden', 403
 
