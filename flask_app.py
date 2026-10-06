@@ -2,7 +2,7 @@ import telebot
 import os
 import hashlib
 import requests
-import google.generativeai as genai
+from google import genai
 from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -10,13 +10,13 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 TOKEN = '8573097337:AAGzQvOvhDO_BqAjadqV2lygfXL3W4rP71k'
 GEMINI_API_KEY = 'AQ.Ab8RN6IqzTlrvnBaghoVDi9bYXo9NW2VX4T9JF9wJgc7_mkggQ'
 
-# Kredensial Digiflazz Sandbox Asli Milik Anda
+# Kredensial Digiflazz Sandbox
 DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125"
 DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction"
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-flash-latest')
+# Inisialisasi Klien Gemini Baru
+client = genai.Client(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
 
@@ -51,10 +51,8 @@ def callback_query(call):
     elif data.startswith("buy_"):
         parts = data.split("_")
         sku = parts[1]
-        harga_jual = int(parts[2])
         nomor_target = parts[3]
         
-        # Eksekusi Tembak API Digiflazz Sandbox Asli
         ref_id = f"TRX_{call.from_user.id}_{int(os.urandom(2).hex(), 16)}"
         raw_sign = DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id
         sign = hashlib.md5(raw_sign.encode()).hexdigest()
@@ -94,20 +92,27 @@ def callback_query(call):
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
-        response = model.generate_content(f"Buatkan caption promosi afiliasi yang menarik berdasarkan teks ini: {message.text}")
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"Buatkan caption promosi afiliasi yang menarik berdasarkan teks ini: {message.text}"
+        )
         bot.reply_to(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Gagal memproses AI: {str(e)}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook_terima():
-    update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
-    bot.process_new_updates([update])
-    return 'OK', 200
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return 'OK', 200
+    else:
+        return 'Forbidden', 403
 
 @app.route('/')
 def index():
-    return "Server Bot PPOB & AI Aktif di Render!", 200
+    return "Server Bot PPOB & AI Aktif di Railway!", 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
