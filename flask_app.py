@@ -35,7 +35,6 @@ def webhook_terima():
     try:
         data = request.get_json(force=True)
         
-        # Cek jika ada pesan teks biasa
         if "message" in data:
             chat_id = data["message"]["chat"]["id"]
             text = data["message"].get("text", "")
@@ -43,13 +42,12 @@ def webhook_terima():
             if text.startswith("/start"):
                 menu = {
                     "inline_keyboard": [
-                        [{"text": "🛍️️ Layanan PPOB", "callback_data": "menu_ppob"}],
-                        {"text": "💡 Bantuan AI Gemini", "callback_data": "menu_bantuan"}]
+                        [{"text": "🛍 Layanan PPOB", "callback_data": "menu_ppob"}],
+                        [{"text": "💡 Bantuan AI Gemini", "callback_data": "menu_bantuan"}]
                     ]
                 }
                 kirim_pesan(chat_id, "Halo! Selamat datang di *Asisten PPOB & AI*. 🚀\n\nKirimkan teks atau pertanyaan apa saja untuk dijawab AI:", menu)
             else:
-                # Proses pakai Gemini AI
                 try:
                     response = client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -59,7 +57,6 @@ def webhook_terima():
                 except Exception as ai_err:
                     kirim_pesan(chat_id, f"Gagal memproses AI: {str(ai_err)}")
 
-        # Cek jika ada klik tombol inline (callback_query)
         elif "callback_query" in data:
             callback = data["callback_query"]
             chat_id = callback["message"]["chat"]["id"]
