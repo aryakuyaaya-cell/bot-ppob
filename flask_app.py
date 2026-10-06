@@ -99,7 +99,7 @@ def handle_text(message):
     except Exception as e:
         bot.reply_to(message, f"Gagal memproses AI: {str(e)}")
 
-@app.route('/' + TOKEN, methods=['POST'])
+@app.route('/webhook', methods=['POST'])
 def webhook_terima():
     update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
     bot.process_new_updates([update])
