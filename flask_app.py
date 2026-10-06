@@ -7,7 +7,7 @@ from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- DATA KREDENSIAL ---
-TOKEN = '8573097337:AAGzQvOvhDO_BqAjadqV2lygfXL3W4rP71k'
+TOKEN = TOKEN = '8654258790:AAEz8WelOJrqxRHXU3iY6r3vhW0mwaZNcSA'
 GEMINI_API_KEY = 'AQ.Ab8RN6IqzTlrvnBaghoVDi9bYXo9NW2VX4T9JF9wJgc7_mkggQ'
 
 # Kredensial Digiflazz Sandbox
