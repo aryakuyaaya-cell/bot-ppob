@@ -45,7 +45,6 @@ def handle_callback(call):
     msg_id = call.message.message_id
     data = call.data
 
-    # INI OBAT ANTI FREEZE / LOADING MUTAR-MUTAR
     bot.answer_callback_query(call.id)
 
     if data == "kembali_utama":
@@ -87,7 +86,7 @@ def handle_callback(call):
         markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
         bot.edit_message_text("🤖 *Fitur AI Aktif!*\nKetik pertanyaan, buat caption promosi afiliasi, atau ngobrol santai langsung di chat ini. AI akan otomatis merespons.", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
     
-    # HANDLER UNTUK PROVIDER (Biar kalau diklik ada balasannya)
+    # HANDLER UNTUK PROVIDER
     elif data.startswith("opsi_"):
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
@@ -99,8 +98,9 @@ def handle_callback(call):
 def handle_text(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
+        # GANTI MODEL KE VERSI 3.8 SESUAI PERMINTAAN GOOGLE
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=f"Jawab dengan asik, ringkas, dan seperti asisten pintar: {message.text}"
         )
         bot.reply_to(message, response.text)
