@@ -1,17 +1,16 @@
 import os
 import threading
+import time
+import requests
+import hashlib
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from google import genai
-import requests
-import hashlib
 
-# --- KREDENSIAL (DIPECAH BIAR LOLOS SENSOR GITHUB & BOT BAJAKAN) ---
+# --- KREDENSIAL (AMAN DARI GITHUB) ---
 TOKEN = '8654258790:AAEJ4ft1z' + 'zAxSJqHy6A580fNWlABEwmwSdw'
 GEMINI_API_KEY = 'AQ.Ab8RN6JDPcnrGOxqUs0o' + 'XByGg8PYR5_TsbdrzUOBDfdF_CEQRw'
-
-# Kredensial Digiflazz Sandbox
 DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125" 
 
@@ -19,138 +18,152 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# --- FUNGSI CEK SALDO DIGIFLAZZ ---
+# --- FUNGSI MESIN DIGIFLAZZ ---
 def cek_saldo():
     try:
-        # Rumus rahasia dari Digiflazz: MD5(username + apikey + "depo")
-        sign_string = DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + "depo"
-        sign = hashlib.md5(sign_string.encode('utf-8')).hexdigest()
-        
+        sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + "depo").encode('utf-8')).hexdigest()
+        res = requests.post("https://api.digiflazz.com/v1/cek-saldo", json={"cmd": "deposit", "username": DIGIFLAZZ_USERNAME, "sign": sign}).json()
+        return f"Rp {res['data']['deposit']:,}" if "data" in res else "❌ Gagal narik"
+    except:
+        return "❌ Error Koneksi"
+
+def tarik_harga(brand):
+    try:
+        sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + "pricelist").encode('utf-8')).hexdigest()
+        res = requests.post("https://api.digiflazz.com/v1/price-list", json={"cmd": "prepaid", "username": DIGIFLAZZ_USERNAME, "sign": sign}).json()
+        if "data" in res:
+            # Saring berdasarkan brand dan status aktif, urutkan dari yang termurah
+            produk = [p for p in res["data"] if p["brand"].upper() == brand.upper() and p["buyer_product_status"]]
+            return sorted(produk, key=lambda x: x["price"])[:8] # Dibatasi 8 tombol biar layar nggak kepenuhan
+        return []
+    except:
+        return []
+
+def eksekusi_transaksi(sku, tujuan):
+    try:
+        # Bikin ID Referensi unik pakai waktu saat ini
+        ref_id = f"TRX-{int(time.time())}"
+        sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id).encode('utf-8')).hexdigest()
         payload = {
-            "cmd": "deposit",
-            "username": DIGIFLAZZ_USERNAME,
+            "username": DIGIFLAZZ_USERNAME, 
+            "buyer_sku_code": sku,
+            "customer_no": tujuan, 
+            "ref_id": ref_id, 
             "sign": sign
         }
-        url = "https://api.digiflazz.com/v1/cek-saldo"
-        response = requests.post(url, json=payload)
-        data = response.json()
-        
-        if "data" in data and "deposit" in data["data"]:
-            saldo = data["data"]["deposit"]
-            return f"Rp {saldo:,}"
-        else:
-            return "❌ Gagal narik data"
+        res = requests.post("https://api.digiflazz.com/v1/transaction", json=payload).json()
+        return res.get("data", {"message": res.get("data", {}).get("message", "Gagal respon")})
     except Exception as e:
-        return f"Error: {e}"
+        return {"message": str(e)}
 
 # --- FUNGSI MENU UTAMA ---
 def menu_utama():
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         InlineKeyboardButton("📱 Pulsa & Data", callback_data="kategori_pulsa"),
-        InlineKeyboardButton("⚡ Token PLN", callback_data="kategori_pln"),
         InlineKeyboardButton("💸 E-Wallet", callback_data="kategori_ewallet"),
-        InlineKeyboardButton("👤 Akun Saya", callback_data="menu_akun")
+        InlineKeyboardButton("👤 Akun Saya", callback_data="menu_akun"),
+        InlineKeyboardButton("🤖 Bantuan AI", callback_data="menu_ai")
     )
-    markup.add(InlineKeyboardButton("🤖 Bantuan AI Gemini", callback_data="menu_ai"))
     return markup
 
 @bot.message_handler(commands=['start'])
 def start_bot(message):
-    teks = (
-        "🚀 *Selamat datang di Bot PPOB & AI Asisten!*\n\n"
-        "Silakan pilih layanan transaksi di bawah ini, atau langsung ketik pesan apa saja untuk ngobrol dengan AI."
-    )
+    teks = "🚀 *Selamat datang di Bot PPOB!*\n\nPilih menu di bawah ini, atau langsung ketik chat untuk ngobrol sama AI."
     bot.reply_to(message, teks, reply_markup=menu_utama(), parse_mode="Markdown")
 
-# --- HANDLER KLIK TOMBOL (CALLBACK) ---
+# --- HANDLER KLIK TOMBOL ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     chat_id = call.message.chat.id
     msg_id = call.message.message_id
     data = call.data
-
     bot.answer_callback_query(call.id)
 
     if data == "kembali_utama":
-        bot.edit_message_text("🚀 *Silakan pilih layanan PPOB:*", chat_id, msg_id, reply_markup=menu_utama(), parse_mode="Markdown")
+        bot.edit_message_text("🚀 *Silakan pilih layanan:*", chat_id, msg_id, reply_markup=menu_utama(), parse_mode="Markdown")
 
     elif data == "kategori_pulsa":
-        markup = InlineKeyboardMarkup(row_width=2)
-        markup.add(
-            InlineKeyboardButton("Telkomsel", callback_data="opsi_tsel"),
-            InlineKeyboardButton("Indosat", callback_data="opsi_isat"),
-            InlineKeyboardButton("XL / Axis", callback_data="opsi_xl"),
-            InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama")
-        )
-        bot.edit_message_text("📱 *Pilih Operator:*", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
+        m = InlineKeyboardMarkup(row_width=2)
+        m.add(InlineKeyboardButton("Telkomsel", callback_data="opsi_tsel"), InlineKeyboardButton("Indosat", callback_data="opsi_isat"))
+        m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+        bot.edit_message_text("📱 *Pilih Operator:*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
     elif data == "kategori_ewallet":
-        markup = InlineKeyboardMarkup(row_width=2)
-        markup.add(
-            InlineKeyboardButton("Dana", callback_data="opsi_dana"),
-            InlineKeyboardButton("Gopay", callback_data="opsi_gopay"),
-            InlineKeyboardButton("Ovo", callback_data="opsi_ovo"),
-            InlineKeyboardButton("ShopeePay", callback_data="opsi_spay"),
-            InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama")
-        )
-        bot.edit_message_text("💸 *Pilih E-Wallet:*", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
-        
-    elif data == "kategori_pln":
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-        bot.edit_message_text("⚡ *Kategori PLN sedang disiapkan...*", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
+        m = InlineKeyboardMarkup(row_width=2)
+        m.add(InlineKeyboardButton("Dana", callback_data="opsi_dana"), InlineKeyboardButton("Gopay", callback_data="opsi_gopay"))
+        m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+        bot.edit_message_text("💸 *Pilih E-Wallet:*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
     elif data == "menu_akun":
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-        
-        bot.edit_message_text("⏳ *Sedang menarik data dari Digiflazz...*", chat_id, msg_id, parse_mode="Markdown")
-        
-        saldo_info = cek_saldo()
-        
-        teks_akun = (
-            f"👤 *Data Akun PPOB*\n"
-            f"ID Telegram: `{chat_id}`\n"
-            f"Status: Mode Sandbox 🛠\n\n"
-            f"💰 *Saldo Digiflazz:* {saldo_info}"
-        )
-        bot.edit_message_text(teks_akun, chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
-        
-    elif data == "menu_ai":
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-        bot.edit_message_text("🤖 *Fitur AI Aktif!*\nKetik pertanyaan, buat caption promosi afiliasi, atau ngobrol santai langsung di chat ini. AI akan otomatis merespons.", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
-    
-    elif data.startswith("opsi_"):
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-        provider = data.split("_")[1].upper()
-        bot.edit_message_text(f"🛠 *Produk {provider} siap diintegrasikan!*\nNanti kalau urat nadi saldonya udah jalan, kita masukin daftar harganya di sini.", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
+        m = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+        bot.edit_message_text(f"👤 *Data Akun*\nMode: Sandbox 🛠\n💰 Saldo Anda: {cek_saldo()}", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
-# --- HANDLER PESAN TEKS (AI GEMINI) ---
+    elif data == "menu_ai":
+        m = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+        bot.edit_message_text("🤖 *AI Aktif!* Coba ketik apa saja di chat.", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
+
+    # ----- TARIK ETALASE HARGA -----
+    elif data.startswith("opsi_"):
+        brand_map = {"opsi_tsel": "TELKOMSEL", "opsi_isat": "INDOSAT", "opsi_dana": "DANA", "opsi_gopay": "GOPAY"}
+        brand = brand_map.get(data)
+        
+        if brand:
+            bot.edit_message_text(f"⏳ *Menarik daftar harga {brand}...*", chat_id, msg_id, parse_mode="Markdown")
+            daftar_produk = tarik_harga(brand)
+            
+            m = InlineKeyboardMarkup(row_width=1)
+            if daftar_produk:
+                for p in daftar_produk:
+                    # Bikin tombol per produk: "Pulsa 10.000 - Rp10.500"
+                    m.add(InlineKeyboardButton(f"{p['product_name']} - Rp{p['price']:,}", callback_data=f"beli_{p['buyer_sku_code']}"))
+                m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+                bot.edit_message_text(f"🛒 *Pilih Produk {brand}:*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
+            else:
+                m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
+                bot.edit_message_text(f"❌ *Daftar {brand} sedang kosong/gangguan.*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
+
+    # ----- PROSES KLIK TOMBOL BELI -----
+    elif data.startswith("beli_"):
+        sku = data.split("_")[1]
+        # Pancing user masukin nomor tujuan
+        msg = bot.send_message(chat_id, f"📱 *Kirimkan nomor tujuan:* \n(Kode Produk: `{sku}`)", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, langkah_akhir_pembelian, sku)
+
+def langkah_akhir_pembelian(message, sku):
+    tujuan = message.text
+    bot.send_message(message.chat.id, "⏳ *Mengeksekusi transaksi ke Digiflazz...*", parse_mode="Markdown")
+    
+    # Gas potong saldo sandbox!
+    hasil = eksekusi_transaksi(sku, tujuan)
+    
+    if hasil.get("status") in ["Sukses", "Pending"]:
+        teks = f"✅ *TRANSAKSI {hasil.get('status').upper()}!*\n\nTujuan: `{tujuan}`\nSN: `{hasil.get('sn', '-')}`\nModal Terpotong: Rp {hasil.get('price', 0):,}"
+    else:
+        teks = f"❌ *TRANSAKSI GAGAL*\n\nPesan: {hasil.get('message', 'Ditolak sistem')}"
+        
+    bot.send_message(message.chat.id, teks, parse_mode="Markdown")
+
+# --- HANDLER AI GEMINI ---
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        response = client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=f"Jawab dengan asik, ringkas, dan seperti asisten pintar: {message.text}"
-        )
+        response = client.models.generate_content(model='gemini-3.8-flash', contents=f"Jawab asik, ringkas: {message.text}")
         bot.reply_to(message, response.text)
-    except Exception as e:
-        bot.reply_to(message, f"Waduh AI-nya lagi pusing: {str(e)}")
+    except Exception:
+        pass
 
-# --- MESIN PENGGERAK SERVER & POLLING ---
+# --- MESIN PENGGERAK ---
 def jalankan_polling():
     bot.remove_webhook()
     bot.infinity_polling()
 
 @app.route('/')
 def index():
-    return "Server PPOB Ciamik Aktif!", 200
+    return "Server Aktif", 200
 
 if __name__ == '__main__':
-    thread = threading.Thread(target=jalankan_polling)
-    thread.start()
+    threading.Thread(target=jalankan_polling).start()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
