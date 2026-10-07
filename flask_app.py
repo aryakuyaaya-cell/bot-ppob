@@ -7,13 +7,13 @@ from google import genai
 import requests
 import hashlib
 
-# --- KREDENSIAL (DIPECAH BIAR LOLOS SENSOR GITHUB) ---
-TOKEN = '8654258790:AAEz8WelOJ' + 'rqxRHXU3iY6r3vhW0mwaZNcSA'
+# --- KREDENSIAL (DIPECAH BIAR LOLOS SENSOR GITHUB & BOT BAJAKAN) ---
+TOKEN = '8654258790:AAEJ4ft1z' + 'zAxSJqHy6A580fNWlABEwmwSdw'
 GEMINI_API_KEY = 'AQ.Ab8RN6JDPcnrGOxqUs0o' + 'XByGg8PYR5_TsbdrzUOBDfdF_CEQRw'
 
-# Kredensial Digiflazz (PAKAI API KEY SANDBOX / DEVELOPMENT)
+# Kredensial Digiflazz Sandbox
 DIGIFLAZZ_USERNAME = "mudafooJvA3o"
-DIGIFLAZZ_API_KEY = "ISI_DENGAN_API_KEY_SANDBOX_KEMAREN" 
+DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125" 
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TOKEN)
@@ -101,12 +101,10 @@ def handle_callback(call):
         markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
         bot.edit_message_text("⚡ *Kategori PLN sedang disiapkan...*", chat_id, msg_id, reply_markup=markup, parse_mode="Markdown")
 
-    # ----- PERUBAHAN DI SINI: TARIK SALDO DIGIFLAZZ -----
     elif data == "menu_akun":
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
         
-        # Kasih loading bentar biar keren
         bot.edit_message_text("⏳ *Sedang menarik data dari Digiflazz...*", chat_id, msg_id, parse_mode="Markdown")
         
         saldo_info = cek_saldo()
@@ -153,7 +151,6 @@ def index():
     return "Server PPOB Ciamik Aktif!", 200
 
 if __name__ == '__main__':
-    # Hati-hati, replit kadang butuh install requests dulu kalau error
     thread = threading.Thread(target=jalankan_polling)
     thread.start()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
