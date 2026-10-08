@@ -12,7 +12,6 @@ from google import genai
 TOKEN = '8654258790:AAEJ4ft1z' + 'zAxSJqHy6A580fNWlABEwmwSdw'
 GEMINI_API_KEY = 'AQ.Ab8RN6JDPcnrGOxqUs0o' + 'XByGg8PYR5_TsbdrzUOBDfdF_CEQRw'
 
-# Kredensial Digiflazz Sandbox
 DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125" 
 
@@ -20,12 +19,11 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# --- FUNGSI MESIN DIGIFLAZZ ---
 def cek_saldo():
     try:
         sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + "depo").encode('utf-8')).hexdigest()
         res = requests.post("https://api.digiflazz.com/v1/cek-saldo", json={"cmd": "deposit", "username": DIGIFLAZZ_USERNAME, "sign": sign}).json()
-        return f"Rp {res['data']['deposit']:,}" if "data" in res else "❌ Gagal narik"
+        return f"Rp {res['data']['deposit']:,}" if "data" in res else f"❌ Error: {res.get('data', {}).get('message', 'Ditolak')}"
     except:
         return "❌ Error Koneksi"
 
@@ -34,16 +32,14 @@ def tarik_harga(brand):
         sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + "pricelist").encode('utf-8')).hexdigest()
         res = requests.post("https://api.digiflazz.com/v1/price-list", json={"cmd": "prepaid", "username": DIGIFLAZZ_USERNAME, "sign": sign}).json()
         if "data" in res:
-            # Saring berdasarkan brand dan status aktif, urutkan dari yang termurah
             produk = [p for p in res["data"] if p["brand"].upper() == brand.upper() and p["buyer_product_status"]]
-            return sorted(produk, key=lambda x: x["price"])[:8] # Dibatasi 8 tombol
+            return sorted(produk, key=lambda x: x["price"])[:8]
         return []
     except:
         return []
 
 def eksekusi_transaksi(sku, tujuan):
     try:
-        # Bikin ID Referensi unik
         ref_id = f"TRX-{int(time.time())}"
         sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id).encode('utf-8')).hexdigest()
         payload = {
@@ -58,7 +54,6 @@ def eksekusi_transaksi(sku, tujuan):
     except Exception as e:
         return {"message": str(e)}
 
-# --- FUNGSI MENU UTAMA ---
 def menu_utama():
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
@@ -74,7 +69,6 @@ def start_bot(message):
     teks = "🚀 *Selamat datang di Bot PPOB!*\n\nPilih menu di bawah ini, atau langsung ketik chat untuk ngobrol sama AI."
     bot.reply_to(message, teks, reply_markup=menu_utama(), parse_mode="Markdown")
 
-# --- HANDLER KLIK TOMBOL ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     chat_id = call.message.chat.id
@@ -99,13 +93,17 @@ def handle_callback(call):
 
     elif data == "menu_akun":
         m = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-        bot.edit_message_text(f"👤 *Data Akun*\nMode: Sandbox 🛠\n💰 Saldo Anda: {cek_saldo()}", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
+        bot.edit_message_text("⏳ *Mengecek Server & Saldo...*", chat_id, msg_id, parse_mode="Markdown")
+        try:
+            ip_server = requests.get('https://api.ipify.org').text
+        except:
+            ip_server = "Gagal Cek IP"
+        bot.edit_message_text(f"👤 *Data Akun*\nMode: Sandbox 🛠\n🌐 IP Server: `{ip_server}`\n💰 Saldo: {cek_saldo()}", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
     elif data == "menu_ai":
         m = InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
         bot.edit_message_text("🤖 *AI Aktif!* Coba ketik apa saja di chat.", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
-    # ----- TARIK ETALASE HARGA -----
     elif data.startswith("opsi_"):
         brand_map = {"opsi_tsel": "TELKOMSEL", "opsi_isat": "INDOSAT", "opsi_dana": "DANA", "opsi_gopay": "GOPAY"}
         brand = brand_map.get(data)
@@ -122,9 +120,8 @@ def handle_callback(call):
                 bot.edit_message_text(f"🛒 *Pilih Produk {brand}:*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
             else:
                 m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
-                bot.edit_message_text(f"❌ *Daftar {brand} sedang kosong/gangguan.*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
+                bot.edit_message_text(f"❌ *Daftar {brand} sedang kosong/gangguan.*\n(Cek IP Server di menu 'Akun Saya', lalu pastikan IP Whitelist Digiflazz sudah sesuai)", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
 
-    # ----- PROSES KLIK TOMBOL BELI -----
     elif data.startswith("beli_"):
         sku = data.split("_")[1]
         msg = bot.send_message(chat_id, f"📱 *Kirimkan nomor tujuan:* \n(Kode Produk: `{sku}`)", parse_mode="Markdown")
@@ -139,21 +136,19 @@ def langkah_akhir_pembelian(message, sku):
     if hasil.get("status") in ["Sukses", "Pending"]:
         teks = f"✅ *TRANSAKSI {hasil.get('status').upper()}!*\n\nTujuan: `{tujuan}`\nSN: `{hasil.get('sn', '-')}`\nModal Terpotong: Rp {hasil.get('price', 0):,}"
     else:
-        teks = f"❌ *TRANSAKSI GAGAL*\n\nPesan: {hasil.get('message', 'Ditolak sistem')}"
+        teks = f"❌ *TRANSAKSI GAGAL*\n\nPesan: {hasil.get('message', 'Ditolak sistem. Cek IP di menu Akun Saya.')}"
         
     bot.send_message(message.chat.id, teks, parse_mode="Markdown")
 
-# --- HANDLER AI GEMINI ---
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         response = client.models.generate_content(model='gemini-3.8-flash', contents=f"Jawab asik, ringkas: {message.text}")
         bot.reply_to(message, response.text)
-    except Exception as e:
-        bot.reply_to(message, f"Waduh AI-nya lagi pusing: {str(e)}")
+    except Exception:
+        pass
 
-# --- MESIN PENGGERAK ---
 def jalankan_polling():
     bot.remove_webhook()
     bot.infinity_polling()
