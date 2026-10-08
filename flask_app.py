@@ -39,7 +39,7 @@ def tarik_harga(brand):
 
 def eksekusi_transaksi(sku, tujuan):
     try:
-        # Hapus tanda strip (-), pakai huruf T biar aman
+        # Ref ID murni huruf T dan angka waktu (tanpa strip agar signature tidak meleset)
         ref_id = f"T{int(time.time())}" 
         sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id).encode('utf-8')).hexdigest()
         
