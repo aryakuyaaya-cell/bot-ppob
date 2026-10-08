@@ -8,9 +8,11 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from google import genai
 
-# --- KREDENSIAL (AMAN DARI GITHUB) ---
+# --- KREDENSIAL (DIPECAH BIAR AMAN DARI GITHUB) ---
 TOKEN = '8654258790:AAEJ4ft1z' + 'zAxSJqHy6A580fNWlABEwmwSdw'
 GEMINI_API_KEY = 'AQ.Ab8RN6JDPcnrGOxqUs0o' + 'XByGg8PYR5_TsbdrzUOBDfdF_CEQRw'
+
+# Kredensial Digiflazz Sandbox
 DIGIFLAZZ_USERNAME = "mudafooJvA3o"
 DIGIFLAZZ_API_KEY = "dev-197d6900-c160-11f1-8df3-0dc49c4b125" 
 
@@ -34,14 +36,14 @@ def tarik_harga(brand):
         if "data" in res:
             # Saring berdasarkan brand dan status aktif, urutkan dari yang termurah
             produk = [p for p in res["data"] if p["brand"].upper() == brand.upper() and p["buyer_product_status"]]
-            return sorted(produk, key=lambda x: x["price"])[:8] # Dibatasi 8 tombol biar layar nggak kepenuhan
+            return sorted(produk, key=lambda x: x["price"])[:8] # Dibatasi 8 tombol
         return []
     except:
         return []
 
 def eksekusi_transaksi(sku, tujuan):
     try:
-        # Bikin ID Referensi unik pakai waktu saat ini
+        # Bikin ID Referensi unik
         ref_id = f"TRX-{int(time.time())}"
         sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id).encode('utf-8')).hexdigest()
         payload = {
@@ -115,7 +117,6 @@ def handle_callback(call):
             m = InlineKeyboardMarkup(row_width=1)
             if daftar_produk:
                 for p in daftar_produk:
-                    # Bikin tombol per produk: "Pulsa 10.000 - Rp10.500"
                     m.add(InlineKeyboardButton(f"{p['product_name']} - Rp{p['price']:,}", callback_data=f"beli_{p['buyer_sku_code']}"))
                 m.add(InlineKeyboardButton("🔙 Kembali", callback_data="kembali_utama"))
                 bot.edit_message_text(f"🛒 *Pilih Produk {brand}:*", chat_id, msg_id, reply_markup=m, parse_mode="Markdown")
@@ -126,7 +127,6 @@ def handle_callback(call):
     # ----- PROSES KLIK TOMBOL BELI -----
     elif data.startswith("beli_"):
         sku = data.split("_")[1]
-        # Pancing user masukin nomor tujuan
         msg = bot.send_message(chat_id, f"📱 *Kirimkan nomor tujuan:* \n(Kode Produk: `{sku}`)", parse_mode="Markdown")
         bot.register_next_step_handler(msg, langkah_akhir_pembelian, sku)
 
@@ -134,7 +134,6 @@ def langkah_akhir_pembelian(message, sku):
     tujuan = message.text
     bot.send_message(message.chat.id, "⏳ *Mengeksekusi transaksi ke Digiflazz...*", parse_mode="Markdown")
     
-    # Gas potong saldo sandbox!
     hasil = eksekusi_transaksi(sku, tujuan)
     
     if hasil.get("status") in ["Sukses", "Pending"]:
@@ -151,8 +150,8 @@ def handle_text(message):
         bot.send_chat_action(message.chat.id, 'typing')
         response = client.models.generate_content(model='gemini-3.8-flash', contents=f"Jawab asik, ringkas: {message.text}")
         bot.reply_to(message, response.text)
-    except Exception:
-        pass
+    except Exception as e:
+        bot.reply_to(message, f"Waduh AI-nya lagi pusing: {str(e)}")
 
 # --- MESIN PENGGERAK ---
 def jalankan_polling():
@@ -166,4 +165,3 @@ def index():
 if __name__ == '__main__':
     threading.Thread(target=jalankan_polling).start()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
