@@ -39,15 +39,17 @@ def tarik_harga(brand):
 
 def eksekusi_transaksi(sku, tujuan):
     try:
-        # Ref ID murni huruf T dan angka waktu (tanpa strip agar signature tidak meleset)
-        ref_id = f"T{int(time.time())}" 
-        sign = hashlib.md5((DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id).encode('utf-8')).hexdigest()
+        ref_id = f"TRX{int(time.time())}"
+        
+        # Rumus signature transaksi: username + api_key + ref_id
+        raw_signature = DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + ref_id
+        sign = hashlib.md5(raw_signature.encode('utf-8')).hexdigest()
         
         payload = {
-            "username": DIGIFLAZZ_USERNAME, 
+            "username": DIGIFLAZZ_USERNAME,
             "buyer_sku_code": sku,
-            "customer_no": tujuan, 
-            "ref_id": ref_id, 
+            "customer_no": tujuan,
+            "ref_id": ref_id,
             "sign": sign,
             "testing": True
         }
